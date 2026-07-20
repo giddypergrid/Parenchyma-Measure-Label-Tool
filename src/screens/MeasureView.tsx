@@ -19,6 +19,19 @@ type Props = {
 const QUARTERS = ['LF', 'RF', 'LR', 'RR']
 const DIETS = ['HC', 'LC']
 
+// outline colours that stay readable on grey speckle
+const COLOURS: [string, string][] = [
+  ['Black', '#14171b'], ['White', '#ffffff'], ['Red', '#e23b2e'],
+  ['Yellow', '#f5c518'], ['Cyan', '#22d3ee'], ['Green', '#4ade80'],
+]
+
+/** Pick a halo that contrasts with whatever outline colour is chosen. */
+function haloFor(hex: string) {
+  const n = parseInt(hex.slice(1), 16)
+  const lum = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)
+  return lum < 140 ? '#ffffff' : '#14171b'
+}
+
 export default function MeasureView({
   dir, project, timepoint, capture, onSave, onCaptureFrame, onBack,
 }: Props) {
@@ -35,6 +48,9 @@ export default function MeasureView({
   const [quarter, setQuarter] = useState<string | undefined>(capture.quarter)
   const [ppc, setPpc] = useState<number | undefined>(capture.scalePpc)
   const [ppcDraft, setPpcDraft] = useState(String(capture.scalePpc ?? project.scalePpc))
+  // a display preference, so it lives with the app, not in the study data
+  const [colour, setColour] = useState(() => localStorage.getItem('outlineColour') ?? '#14171b')
+  const halo = haloFor(colour)
   const boxRef = useRef<HTMLDivElement>(null)
   const [boxW, setBoxW] = useState(560)
 
@@ -228,16 +244,16 @@ export default function MeasureView({
                   <KImage image={img} width={stageW} height={stageH} />
                   {pts.length > 0 && (
                     <>
-                      <Line points={flat} closed={closed} stroke="#fff" strokeWidth={1.6} />
-                      <Line points={flat} closed={closed} stroke="#14171b" strokeWidth={0.75}
-                        fill={closed ? 'rgba(255,255,255,0.07)' : undefined} />
+                      <Line points={flat} closed={closed} stroke={halo} strokeWidth={1.2} />
+                      <Line points={flat} closed={closed} stroke={colour} strokeWidth={0.6}
+                        fill={closed ? 'rgba(255,255,255,0.06)' : undefined} />
                     </>
                   )}
                   {pts.map((p, i) => (
-                    <Rect key={i} x={p[0] * scale - 2} y={p[1] * scale - 2} width={4} height={4}
-                      fill="#fff" stroke="#14171b" strokeWidth={0.7} draggable
-                      hitStrokeWidth={12} /* small dot, still easy to grab */
-                      onDragMove={(e) => moveVertex(i, e.target.x() + 2, e.target.y() + 2)} />
+                    <Rect key={i} x={p[0] * scale - 1.5} y={p[1] * scale - 1.5} width={3} height={3}
+                      fill={colour} stroke={halo} strokeWidth={0.6} draggable
+                      hitStrokeWidth={8} /* small enough to pack 30 dots, still grabbable */
+                      onDragMove={(e) => moveVertex(i, e.target.x() + 1.5, e.target.y() + 1.5)} />
                   ))}
                   <Rect x={0} y={0} width={stageW} height={26} fill="rgba(255,255,255,0.92)" />
                   <Text x={8} y={7} text={overlay} fontSize={13}
@@ -253,9 +269,14 @@ export default function MeasureView({
               {crossed
                 ? 'outline crosses itself — the area would be wrong; drag a point to untangle it'
                 : m
-                  ? `${m.area.toFixed(2)} mm² · w ${m.width.toFixed(2)} · d ${m.depth.toFixed(2)}`
+                  ? `${m.area.toFixed(2)} mm² · w ${m.width.toFixed(2)} · d ${m.depth.toFixed(2)} · ${pts.length} dots`
                   : '—'}
             </span>
+            <select value={colour} title="outline colour"
+              onChange={(e) => { setColour(e.target.value); localStorage.setItem('outlineColour', e.target.value) }}
+              style={{ width: 84 }}>
+              {COLOURS.map(([name, hex]) => <option key={hex} value={hex}>{name}</option>)}
+            </select>
             <button onClick={() => { setPts(pts.slice(0, -1)); setClosed(false) }} disabled={!pts.length}>Undo</button>
             <button onClick={() => setClosed(true)} disabled={pts.length < 3 || closed}>Close loop</button>
             <button onClick={() => { setPts([]); setClosed(false) }} disabled={!pts.length}>Clear</button>

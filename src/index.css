@@ -172,3 +172,8 @@ input {
 }
 .idbar .sep { width: 1px; height: 22px; background: var(--rule); margin: 0 4px; }
 .overridden { font-size: 11px; color: #8a1f1f; font-weight: 600; }
+
+.mtools select {
+  font: 12px var(--sans); border: 1px solid var(--line); background: #fff;
+  color: var(--ink); padding: 6px 6px; border-radius: 0;
+}
