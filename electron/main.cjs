@@ -3,6 +3,10 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
+// Pin the name so dev and the packaged .exe share one userData folder,
+// otherwise the recent-projects list differs between them.
+app.setName('Parenchyma Measure');
+
 const isDev = !app.isPackaged;
 const recentsFile = () => path.join(app.getPath('userData'), 'recents.json');
 
