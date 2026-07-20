@@ -12,8 +12,23 @@ type Props = {
   onOpenCapture: (c: Capture) => void
   onVideoAdded: (
     clip: string, firstFrame: string, framesDir: string, videoPath: string,
+    calf: string, diet: string, quarter: string,
   ) => void
 }
+
+const DIETS = ['HC', 'LC']
+const QUARTERS = ['LF', 'RF', 'LR', 'RR']
+
+/**
+ * Suggest a calf id from the filename — only ever a suggestion the operator
+ * confirms. Takes the first 3-5 digit run so an 8-digit date is skipped.
+ */
+function guessCalf(clip: string) {
+  const nums = clip.split(/\D+/).filter(Boolean)
+  return nums.find((n) => n.length >= 3 && n.length <= 5) ?? ''
+}
+
+type Pending = { clip: string; firstFrame: string; framesDir: string; videoPath: string }
 
 export default function TimepointView({
   dir, project, timepoint, onOpenCapture, onVideoAdded,
@@ -21,6 +36,10 @@ export default function TimepointView({
   const caps = project.captures.filter((c) => c.timepointId === timepoint.id)
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState('')
+  const [pending, setPending] = useState<Pending | null>(null)
+  const [calf, setCalf] = useState('')
+  const [diet, setDiet] = useState('')
+  const [quarter, setQuarter] = useState('')
 
   // one thumbnail per existing capture
   useEffect(() => {
@@ -58,7 +77,11 @@ export default function TimepointView({
       const outDir = `${dir}\\${safeName(timepoint.name)}\\${clip}`
       const res = await window.api.importVideo({ videoPath: video, outDir, fps: FPS })
       if (!res.frames.length) throw new Error('no stills were produced')
-      onVideoAdded(clip, res.frames[0], outDir, res.videoPath)
+      // nothing is recorded until the operator confirms who this clip belongs to
+      setPending({ clip, firstFrame: res.frames[0], framesDir: outDir, videoPath: res.videoPath })
+      setCalf(guessCalf(clip))
+      setDiet('')
+      setQuarter(project.defaultQuarter ?? '')
     } catch (e) {
       alert('Import failed: ' + (e as Error).message)
     } finally {
@@ -112,6 +135,56 @@ export default function TimepointView({
               </button>
             )
           })}
+        </div>
+      )}
+
+      {pending && (
+        <div className="modal">
+          <div className="box">
+            <h2>Which animal is this clip?</h2>
+            <p className="muted small" style={{ marginTop: -8 }}>
+              <b>{pending.clip}</b> — recorded against these details, not the filename.
+            </p>
+            <div className="field">
+              <label>Calf id</label>
+              <input value={calf} onChange={(e) => setCalf(e.target.value)}
+                placeholder="e.g. 3112" autoFocus />
+              <span className="muted small">
+                {guessCalf(pending.clip)
+                  ? 'suggested from the filename — check it is right'
+                  : 'no id found in the filename — type it in'}
+              </span>
+            </div>
+            <div className="field">
+              <label>Diet</label>
+              <select value={diet} onChange={(e) => setDiet(e.target.value)}>
+                <option value="">—</option>
+                {DIETS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Quarter</label>
+              <select value={quarter} onChange={(e) => setQuarter(e.target.value)}>
+                <option value="">—</option>
+                {QUARTERS.map((q) => <option key={q} value={q}>{q}</option>)}
+              </select>
+            </div>
+            <div className="row end">
+              <button onClick={() => setPending(null)}>Cancel</button>
+              <button className="pri" disabled={!calf.trim() || !diet}
+                onClick={() => {
+                  onVideoAdded(pending.clip, pending.firstFrame, pending.framesDir,
+                    pending.videoPath, calf.trim(), diet, quarter)
+                  setPending(null)
+                }}>
+                Add capture
+              </button>
+            </div>
+            <p className="muted small" style={{ margin: '10px 0 0' }}>
+              Calf id and diet are required — without them the measurement cannot be
+              grouped in the chart or the CSV.
+            </p>
+          </div>
         </div>
       )}
     </>
