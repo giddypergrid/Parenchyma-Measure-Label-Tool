@@ -177,3 +177,15 @@ input {
   font: 12px var(--sans); border: 1px solid var(--line); background: #fff;
   color: var(--ink); padding: 6px 6px; border-radius: 0;
 }
+
+/* delete controls */
+.tpedit.del { color: #8a1f1f; }
+.tpedit.del:hover:not(:disabled) { background: #f6e7e7; }
+.cap { position: relative; }
+.capx {
+  position: absolute; top: 5px; right: 5px; z-index: 2;
+  padding: 0; width: 20px; height: 20px; line-height: 1;
+  font-size: 11px; color: #8a1f1f; background: #fff; opacity: 0;
+}
+.cap:hover .capx { opacity: 1; }
+.capx:hover { background: #f6e7e7; }

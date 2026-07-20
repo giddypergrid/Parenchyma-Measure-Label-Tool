@@ -11,5 +11,6 @@ contextBridge.exposeInMainWorld('api', {
   importVideo: (opts) => ipcRenderer.invoke('import-video', opts),
   listFrames: (dirPath) => ipcRenderer.invoke('list-frames', dirPath),
   writeFile: (opts) => ipcRenderer.invoke('write-file', opts),
+  deleteFolder: (opts) => ipcRenderer.invoke('delete-folder', opts),
   readImage: (filePath) => ipcRenderer.invoke('read-image', filePath),
 });

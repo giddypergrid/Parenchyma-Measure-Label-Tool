@@ -19,6 +19,7 @@ declare global {
       }>
       listFrames(dirPath: string): Promise<string[]>
       writeFile(o: { filePath: string; contents: string }): Promise<string>
+      deleteFolder(o: { projectDir: string; target: string }): Promise<boolean>
       readImage(filePath: string): Promise<string>
     }
   }

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { newId, type Project, type Timepoint } from '../types'
 import type { Capture } from '../types'
 import { metrics, quarterOf, scaleOf } from '../measure'
-import { rel } from '../paths'
+import { rel, safeName } from '../paths'
 import Timepoints from './Timepoints'
 import TimepointView from './TimepointView'
 import MeasureView from './MeasureView'
@@ -102,6 +102,47 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
     setOpenCapId(todo ? todo.id : null)
   }
 
+  /** Removes the capture, its video, its stills and its outline. */
+  async function deleteCapture(id: string) {
+    const c = project.captures.find((x) => x.id === id)
+    if (!c) return
+    const measured = c.border && c.border.length >= 3
+    if (!confirm(
+      `Delete calf ${c.calf} — ${c.clip}?\n\n` +
+      `This removes the video, its stills${measured ? ' and the saved outline' : ''} ` +
+      `from disk.\n\nThis cannot be undone.`)) return
+    if (c.framesDir) {
+      try { await window.api.deleteFolder({ projectDir: dir, target: c.framesDir }) }
+      catch (e) { alert('Could not delete the files: ' + (e as Error).message) }
+    }
+    update({ ...project, captures: project.captures.filter((x) => x.id !== id) })
+    if (openCapId === id) setOpenCapId(null)
+  }
+
+  /** Removes the timepoint and every capture inside it, files included. */
+  async function deleteTimepoint(id: string) {
+    const t = project.timepoints.find((x) => x.id === id)
+    if (!t) return
+    const caps = project.captures.filter((c) => c.timepointId === id)
+    const measured = caps.filter((c) => c.border && c.border.length >= 3).length
+    if (!confirm(
+      `Delete ${t.name}?\n\n` +
+      `${caps.length} capture(s), including ${measured} saved measurement(s), and all ` +
+      `their videos and stills will be removed from disk.\n\nThis cannot be undone.`)) return
+    for (const c of caps) {
+      if (!c.framesDir) continue
+      try { await window.api.deleteFolder({ projectDir: dir, target: c.framesDir }) } catch { /* keep going */ }
+    }
+    try { await window.api.deleteFolder({ projectDir: dir, target: safeName(t.name) }) } catch { /* may already be gone */ }
+    update({
+      ...project,
+      timepoints: project.timepoints.filter((x) => x.id !== id),
+      captures: project.captures.filter((c) => c.timepointId !== id),
+    })
+    if (openTp?.id === id) setOpenTp(null)
+    setOpenCapId(null)
+  }
+
   async function exportCsv() {
     const filePath = `${dir}\\measurements.csv`
     await window.api.writeFile({ filePath, contents: csvText(project) })
@@ -136,10 +177,11 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
             onBack={() => setOpenCapId(null)} />
         ) : openTp ? (
           <TimepointView dir={dir} project={project} timepoint={openTp}
-            onOpenCapture={(c) => setOpenCapId(c.id)} onVideoAdded={addCaptureFromVideo} />
+            onOpenCapture={(c) => setOpenCapId(c.id)} onVideoAdded={addCaptureFromVideo}
+            onDeleteCapture={deleteCapture} />
         ) : (
           <Timepoints project={project} onAdd={addTimepoint} onRename={renameTimepoint}
-            onOpen={setOpenTp} />
+            onOpen={setOpenTp} onDelete={deleteTimepoint} />
         )}
       </main>
 

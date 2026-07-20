@@ -186,6 +186,18 @@ ipcMain.handle('import-video', async (_e, { videoPath, outDir, fps = 5 }) => {
   return { videoPath: dest, frames };
 });
 
+// Delete a folder, but only ever one INSIDE the project — a path-traversal guard,
+// because this is the one operation that destroys the operator's data.
+ipcMain.handle('delete-folder', async (_e, { projectDir, target }) => {
+  const root = path.resolve(projectDir);
+  const abs = path.resolve(root, target);
+  if (abs === root || !abs.startsWith(root + path.sep)) {
+    throw new Error('refused: target is not inside the project folder');
+  }
+  fs.rmSync(abs, { recursive: true, force: true });
+  return true;
+});
+
 ipcMain.handle('write-file', async (_e, { filePath, contents }) => {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, contents, 'utf8');

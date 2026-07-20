@@ -10,12 +10,13 @@ type Props = {
   onAdd: (name: string, date: string) => void
   onRename: (id: string, name: string, date: string) => void
   onOpen: (t: Timepoint) => void
+  onDelete: (id: string) => void
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
 const DASH = [undefined, '5 4', '2 3', '8 3 2 3']
 
-export default function Timepoints({ project, onAdd, onRename, onOpen }: Props) {
+export default function Timepoints({ project, onAdd, onRename, onOpen, onDelete }: Props) {
   const [editing, setEditing] = useState<Timepoint | 'new' | null>(null)
   const [name, setName] = useState('')
   const [date, setDate] = useState(today())
@@ -81,6 +82,8 @@ export default function Timepoints({ project, onAdd, onRename, onOpen }: Props) 
                       </span>
                     </button>
                     <button className="tpedit" title="Rename" onClick={() => openDialog(t)}>✎</button>
+                    <button className="tpedit del" title={`Delete ${t.name}`}
+                      onClick={() => onDelete(t.id)}>✕</button>
                   </li>
                 )
               })}

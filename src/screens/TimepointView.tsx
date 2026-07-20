@@ -14,6 +14,7 @@ type Props = {
     clip: string, firstFrame: string, framesDir: string, videoPath: string,
     calf: string, diet: string, quarter: string,
   ) => void
+  onDeleteCapture: (id: string) => void
 }
 
 const DIETS = ['HC', 'LC']
@@ -31,7 +32,7 @@ function guessCalf(clip: string) {
 type Pending = { clip: string; firstFrame: string; framesDir: string; videoPath: string }
 
 export default function TimepointView({
-  dir, project, timepoint, onOpenCapture, onVideoAdded,
+  dir, project, timepoint, onOpenCapture, onVideoAdded, onDeleteCapture,
 }: Props) {
   const caps = project.captures.filter((c) => c.timepointId === timepoint.id)
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
@@ -115,7 +116,9 @@ export default function TimepointView({
           {caps.map((c) => {
             const m = metrics(c.border, scaleOf(project, c))
             return (
-              <button key={c.id} className="cap" onClick={() => onOpenCapture(c)}>
+              <div key={c.id} className="cap" onClick={() => onOpenCapture(c)}>
+                <button className="capx" title="Delete this video and its stills"
+                  onClick={(e) => { e.stopPropagation(); onDeleteCapture(c.id) }}>✕</button>
                 {c.framePath && thumbs[c.framePath] ? (
                   <img src={thumbs[c.framePath]} alt="" />
                 ) : (
@@ -132,7 +135,7 @@ export default function TimepointView({
                     ? `${m.area.toFixed(2)} mm²  ·  w ${m.width.toFixed(2)}  ·  d ${m.depth.toFixed(2)}`
                     : 'click to measure'}
                 </div>
-              </button>
+              </div>
             )
           })}
         </div>
