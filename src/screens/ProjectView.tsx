@@ -9,6 +9,15 @@ import MeasureView from './MeasureView'
 
 type Props = { dir: string; project: Project; onClose: () => void }
 
+/**
+ * Pull a calf id out of a filename. Take the first 3–5 digit run, so an 8-digit
+ * date like 20260614 in "…20260614_3112_5_LR" doesn't get mistaken for the animal.
+ */
+function guessCalf(clip: string) {
+  const nums = clip.split(/\D+/).filter(Boolean)
+  return nums.find((n) => n.length >= 3 && n.length <= 5) ?? nums[0] ?? clip
+}
+
 /** Quote anything containing a comma, quote or newline, else Excel splits the row. */
 const cell = (v: unknown) => {
   const s = String(v ?? '')
@@ -69,7 +78,7 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
       ...project,
       captures: [...project.captures, {
         id, timepointId: openTp.id, clip,
-        calf: clip.match(/\d{3,}/)?.[0] ?? clip, diet: '',
+        calf: guessCalf(clip), diet: '',
         quarter: clip.toUpperCase().match(/\b(LF|RF|LR|RR)\b/)?.[1] ?? '',
         // stored relative so the project folder stays portable
         framesDir: rel(dir, framesDir), videoPath: rel(dir, videoPath),
