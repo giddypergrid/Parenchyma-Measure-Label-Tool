@@ -189,3 +189,10 @@ input {
 }
 .cap:hover .capx { opacity: 1; }
 .capx:hover { background: #f6e7e7; }
+
+/* projects list rows */
+.plist li { display: flex; align-items: stretch; margin-bottom: -1px; }
+.prow { flex: 1; cursor: pointer; border: 1px solid var(--line); background: var(--card); }
+.prow:hover { background: var(--hover); }
+.prowx { border-left: none; padding: 0 11px; color: #8a1f1f; }
+.prowx:hover:not(:disabled) { background: #f6e7e7; }

@@ -37,11 +37,22 @@ export default function Start({ onOpen }: Props) {
             <ul className="plist">
               {recents.map((r) => (
                 <li key={r.dir}>
-                  <button className="prow" onClick={async () => handle(await window.api.openProject(r.dir))}>
+                  <div className="prow" onClick={async () => handle(await window.api.openProject(r.dir))}>
                     <span className="pname">{r.name}</span>
                     <span className="ppath">{r.dir}</span>
                     <span className="pdate">{new Date(r.lastOpened).toLocaleDateString()}</span>
-                  </button>
+                  </div>
+                  <button className="prowx" title="Remove from this list"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      // only forgets the shortcut — the folder and its data are left alone
+                      if (!confirm(
+                        `Remove "${r.name}" from this list?\n\n` +
+                        `The project folder is NOT deleted — it stays at:\n${r.dir}\n\n` +
+                        `You can open it again with "Open a project folder…".`)) return
+                      await window.api.forgetProject(r.dir)
+                      setRecents(await window.api.listProjects())
+                    }}>✕</button>
                 </li>
               ))}
             </ul>
