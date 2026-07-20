@@ -27,7 +27,8 @@ function csvText(project: Project) {
     // frame filename is recorded so any measurement can be traced back to its image
     const frame = c.framePath?.split(/[\\/]/).pop() ?? ''
     return [[c.calf, quarterOf(project, c), t?.name ?? '', t?.date ?? '', c.diet, c.clip, frame,
-      m.area.toFixed(1), m.width.toFixed(1), m.depth.toFixed(1), ppc]
+      // 3 dp in the export so no precision is lost before analysis
+      m.area.toFixed(3), m.width.toFixed(3), m.depth.toFixed(3), ppc]
       .map(cell).join(',')]
   })
   return [head, ...rows].join('\n')

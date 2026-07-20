@@ -106,7 +106,7 @@ export default function TimepointView({
                   {c.clip}
                   <br />
                   {m
-                    ? `${m.area.toFixed(0)} mm²  ·  w ${m.width.toFixed(1)}  ·  d ${m.depth.toFixed(1)}`
+                    ? `${m.area.toFixed(2)} mm²  ·  w ${m.width.toFixed(2)}  ·  d ${m.depth.toFixed(2)}`
                     : 'click to measure'}
                 </div>
               </button>

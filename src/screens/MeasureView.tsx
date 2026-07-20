@@ -123,7 +123,7 @@ export default function MeasureView({
   const m = crossed ? null : metrics(closed ? pts : null, scale_)
 
   const overlay = m
-    ? `AREA ${m.area.toFixed(0)} mm²   W ${m.width.toFixed(1)}   D ${m.depth.toFixed(1)}   scale ${scale_} px/cm`
+    ? `AREA ${m.area.toFixed(2)} mm²   W ${m.width.toFixed(2)}   D ${m.depth.toFixed(2)}   scale ${scale_} px/cm`
     : `click around the parenchyma · click the first dot to close   ·   scale ${scale_} px/cm`
 
   function capture_() {
@@ -253,7 +253,7 @@ export default function MeasureView({
               {crossed
                 ? 'outline crosses itself — the area would be wrong; drag a point to untangle it'
                 : m
-                  ? `${m.area.toFixed(0)} mm² · w ${m.width.toFixed(1)} · d ${m.depth.toFixed(1)}`
+                  ? `${m.area.toFixed(2)} mm² · w ${m.width.toFixed(2)} · d ${m.depth.toFixed(2)}`
                   : '—'}
             </span>
             <button onClick={() => { setPts(pts.slice(0, -1)); setClosed(false) }} disabled={!pts.length}>Undo</button>
