@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release/
+*.local
+.DS_Store
+
+# dev artefacts from scripts/verify_ui.py
+v[0-9]_*.png
+verify_*.png
+build/icon_sizes.png
