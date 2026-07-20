@@ -97,7 +97,9 @@ ipcMain.handle('create-project', async (_e, name) => {
   const project = {
     name,
     createdAt: new Date().toISOString(),
-    scalePpc: 131.5,
+    // measured off the Mindray depth ruler: 5 minor ticks per cm, 132 px between
+    // the 0 and 1 cm marks. Override per project/image if the depth setting differs.
+    scalePpc: 132.0,
     timepoints: [],
     captures: [],
   };

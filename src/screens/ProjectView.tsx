@@ -150,7 +150,7 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
               <div className="row">
                 <input type="number" step="0.1" value={ppc} onChange={(e) => setPpc(e.target.value)}
                   style={{ width: 110 }} />
-                <span className="muted small">= {(10 / (Number(ppc) || 131.5)).toFixed(4)} mm per pixel</span>
+                <span className="muted small">= {(10 / (Number(ppc) || 132)).toFixed(4)} mm per pixel</span>
               </div>
             </div>
             <p className="muted small">
