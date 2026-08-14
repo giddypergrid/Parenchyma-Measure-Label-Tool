@@ -1,9 +1,8 @@
 /**
- * Splitting a clip into stills without ffmpeg.
+ * Splitting a clip into stills using the browser's own video decoder.
  *
- * The desktop app shells out to ffmpeg, which decodes anything. A browser can
- * only decode what it ships a codec for — practically mp4/webm — so an AVI from
- * the Mindray will fail here and must be imported in the desktop app instead.
+ * That means only formats the browser ships a codec for — practically mp4 and
+ * webm. An AVI will not decode and has to be converted first.
  */
 
 const MAX_FRAMES = 900 // ~3 min at 5 fps; a guard, not a limit anyone should hit
@@ -21,8 +20,7 @@ function loadVideo(file: File): Promise<HTMLVideoElement> {
     }
     v.onerror = () =>
       reject(new Error(
-        `this browser cannot decode ${file.name} — ` +
-        `convert it to MP4, or import the clip in the desktop app`,
+        `this browser cannot decode ${file.name} — convert it to MP4 first`,
       ))
     v.src = url
   })

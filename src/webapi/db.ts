@@ -1,8 +1,8 @@
 /**
- * Recent projects for the browser build. Electron keeps this in a JSON file;
- * a browser tab cannot, so the directory HANDLE itself is stored in IndexedDB —
- * that is the only way to reopen a real folder on a later visit without
- * re-picking it. Structured clone keeps the handle usable across sessions.
+ * Recent projects. A page cannot remember a filesystem path, so the directory
+ * HANDLE itself is stored in IndexedDB — that is the only way to reopen a real
+ * folder on a later visit without re-picking it. Structured clone keeps the
+ * handle usable across sessions.
  */
 
 export type WebProjectRecord = {

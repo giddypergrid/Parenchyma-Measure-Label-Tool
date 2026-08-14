@@ -1,10 +1,10 @@
 /**
  * File and folder dialogs in a browser tab.
  *
- * Chrome and Edge can hand back a real folder on disk (File System Access API),
- * which is what the desktop app does. Everything else falls back to a hidden
- * <input type=file> for files, and to origin-private storage for folders — the
- * project then lives inside the browser rather than in a folder the user can see.
+ * Chrome and Edge can hand back a real folder on disk (File System Access API).
+ * Everything else falls back to a hidden <input type=file> for files, and to
+ * origin-private storage for folders — the project then lives inside the
+ * browser rather than in a folder the user can see.
  */
 
 const canPickFolder = typeof (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker === 'function'

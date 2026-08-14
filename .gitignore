@@ -1,8 +1,8 @@
 node_modules/
-dist/
-release/
 *.local
 .DS_Store
+
+# docs/ is the build output AND what GitHub Pages serves — it must stay tracked
 
 # dev artefacts from scripts/verify_ui.py
 v[0-9]_*.png

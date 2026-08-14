@@ -4,8 +4,9 @@ import './index.css'
 import App from './App.tsx'
 import { installWebApi } from './webapi'
 
-// Electron injects window.api from its preload; a browser tab gets the web build instead
-if (!window.api) installWebApi()
+// storage layer: the screens reach files through window.api, backed by the
+// File System Access API against a folder the user picks
+installWebApi()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

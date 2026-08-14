@@ -1,16 +1,13 @@
 /**
- * The browser build of `window.api`.
+ * The storage layer: everything the screens do to files goes through here.
  *
- * Electron injects `window.api` from its preload script. In a plain browser tab
- * nothing injects it, which is why the web version could not open files at all.
- * This module implements the same surface on top of the File System Access API,
- * so every screen runs unchanged in a tab.
- *
- * Differences from the desktop app, all of them deliberate:
- *  - a folder can only be opened in Chrome or Edge; elsewhere projects are kept
- *    in origin-private browser storage instead
- *  - clips are split by the browser's own video decoder, not ffmpeg, so formats
- *    it has no codec for (AVI, most MKV) must be imported in the desktop app
+ * It is built on the File System Access API, so a project is a real folder the
+ * user picks and the app only ever sees inside it. Two consequences worth
+ * knowing:
+ *  - a folder can only be opened in Chrome or Edge; elsewhere projects fall back
+ *    to origin-private browser storage
+ *  - clips are split by the browser's own video decoder, so formats it has no
+ *    codec for (AVI, most MKV) have to be converted first
  */
 
 import type { Project, ProjectRef } from '../types'
@@ -20,7 +17,7 @@ import { allProjects, deleteProject, getProject, putProject, type WebProjectReco
 import * as fs from './fs'
 import { extractFrames } from './frames'
 import { ensureAccess, folderPickerAvailable, pickFiles, pickParentFolder, pickProjectFolder } from './pick'
-import { markBrowser, reportProgress } from './support'
+import { reportProgress } from './support'
 
 type Opened = { dir: string; project: Project } | { error: string } | null
 
@@ -192,9 +189,9 @@ const api: Window['api'] = {
 
   async writeFile({ filePath, contents }) {
     await fs.writeFile(filePath, contents)
-    // A tab cannot show the user where the project folder is, and for a project
-    // kept in browser storage there is no folder to open at all — so hand the
-    // file over as a download as well. The desktop app just writes it.
+    // The page cannot show the user where their project folder is, and for a
+    // project kept in browser storage there is no folder to open at all — so
+    // hand the file over as a download as well as writing it.
     download(filePath.split(/[\\/]/).pop() ?? 'export.csv', contents)
     return filePath
   },
@@ -210,8 +207,7 @@ const api: Window['api'] = {
   readImage: (filePath) => fs.objectUrl(filePath),
 }
 
-/** Called at start-up only when Electron has not already injected the real api. */
+/** Installed once at start-up; every screen reaches storage through it. */
 export function installWebApi() {
   window.api = api
-  markBrowser()
 }

@@ -1,10 +1,10 @@
 /**
  * A tiny path layer over the File System Access API.
  *
- * The rest of the app speaks Windows-style strings ("<dir>\Week 1\clip\frame.png")
- * and hands them across what used to be the Electron IPC boundary. A browser has
- * no such paths, so a project folder is registered under a synthetic token and
- * every path is resolved by walking directory handles from that token.
+ * The rest of the app speaks Windows-style strings ("<dir>\Week 1\clip\frame.png").
+ * A page never learns a real filesystem path, so a project folder is registered
+ * under a synthetic token and every path is resolved by walking directory
+ * handles from that token.
  */
 
 const roots = new Map<string, FileSystemDirectoryHandle>()
