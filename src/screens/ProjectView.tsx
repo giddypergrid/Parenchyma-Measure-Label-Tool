@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { newId, type Project, type Timepoint } from '../types'
 import type { Capture } from '../types'
 import { metrics, quarterOf, scaleOf } from '../measure'
-import { rel, safeName } from '../paths'
+import { rel, timepointDir, uniqueTimepointDir } from '../paths'
 import Timepoints from './Timepoints'
-import TimepointView from './TimepointView'
+import TimepointView, { type ImageEntry } from './TimepointView'
 import MeasureView from './MeasureView'
 
 type Props = { dir: string; project: Project; onClose: () => void }
@@ -42,14 +42,25 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
   const [ppc, setPpc] = useState(String(initial.scalePpc))
   const [defQuarter, setDefQuarter] = useState(initial.defaultQuarter ?? '')
   const [flash, setFlash] = useState('')
+  const [saveErr, setSaveErr] = useState('')
 
+  /**
+   * Every change is written to project.json immediately. A failed write used to
+   * be silent, which meant work could look saved and be gone on reload — the
+   * banner stays up until a write succeeds.
+   */
   function update(next: Project) {
     setProject(next)
-    window.api.saveProject({ dir, project: next })
+    window.api
+      .saveProject({ dir, project: next })
+      .then(() => setSaveErr(''))
+      .catch((e: Error) =>
+        setSaveErr(`Could not save to project.json — your last change is NOT on disk. ${e.message}`))
   }
 
   function addTimepoint(name: string, date: string) {
-    update({ ...project, timepoints: [...project.timepoints, { id: newId(), name, date }] })
+    const dir = uniqueTimepointDir(name, project.timepoints)
+    update({ ...project, timepoints: [...project.timepoints, { id: newId(), name, date, dir }] })
   }
 
   function renameTimepoint(id: string, name: string, date: string) {
@@ -73,11 +84,25 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
         id, timepointId: openTp.id, clip, calf, diet,
         quarter: quarter && quarter !== project.defaultQuarter ? quarter : undefined,
         // stored relative so the project folder stays portable
+        source: 'video',
         framesDir: rel(dir, framesDir), videoPath: rel(dir, videoPath),
         framePath: rel(dir, firstFrame), border: null,
       }],
     })
     setOpenCapId(id)
+  }
+
+  /** Stills arrive as a confirmed batch; a single one opens straight into measuring. */
+  function addCapturesFromImages(entries: ImageEntry[]) {
+    if (!openTp || !entries.length) return
+    const added: Capture[] = entries.map((e) => ({
+      id: newId(), timepointId: openTp.id, clip: e.clip, calf: e.calf.trim(), diet: e.diet,
+      quarter: e.quarter && e.quarter !== project.defaultQuarter ? e.quarter : undefined,
+      source: 'image',
+      framesDir: rel(dir, e.framesDir), framePath: rel(dir, e.imagePath), border: null,
+    }))
+    update({ ...project, captures: [...project.captures, ...added] })
+    if (added.length === 1) setOpenCapId(added[0].id)
   }
 
   /** Pressing Capture picks the working still — persist it right away. */
@@ -95,7 +120,9 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
       captures: project.captures.map((c) => (c.id === captureId ? { ...c, ...patch } : c)),
     }
     update(next)
-    // jump to the next unmeasured capture in this timepoint, else back to the grid
+    // Only a finished outline advances. Correcting a calf id on an unmeasured
+    // capture should leave you where you are, not skip you to another animal.
+    if (!patch.border) return
     const todo = next.captures.find(
       (c) => c.timepointId === openTp?.id && c.id !== captureId && !(c.border && c.border.length >= 3),
     )
@@ -107,9 +134,10 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
     const c = project.captures.find((x) => x.id === id)
     if (!c) return
     const measured = c.border && c.border.length >= 3
+    const what = c.source === 'image' ? 'the image' : 'the video and its stills'
     if (!confirm(
       `Delete calf ${c.calf} — ${c.clip}?\n\n` +
-      `This removes the video, its stills${measured ? ' and the saved outline' : ''} ` +
+      `This removes ${what}${measured ? ' and the saved outline' : ''} ` +
       `from disk.\n\nThis cannot be undone.`)) return
     if (c.framesDir) {
       try { await window.api.deleteFolder({ projectDir: dir, target: c.framesDir }) }
@@ -133,7 +161,8 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
       if (!c.framesDir) continue
       try { await window.api.deleteFolder({ projectDir: dir, target: c.framesDir }) } catch { /* keep going */ }
     }
-    try { await window.api.deleteFolder({ projectDir: dir, target: safeName(t.name) }) } catch { /* may already be gone */ }
+    // the folder is addressed by its stored dir, so a rename cannot misdirect this
+    try { await window.api.deleteFolder({ projectDir: dir, target: timepointDir(t) }) } catch { /* may already be gone */ }
     update({
       ...project,
       timepoints: project.timepoints.filter((x) => x.id !== id),
@@ -144,11 +173,19 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
   }
 
   async function exportCsv() {
-    const filePath = `${dir}\\measurements.csv`
-    await window.api.writeFile({ filePath, contents: csvText(project) })
-    const n = project.captures.filter((c) => metrics(c.border, project.scalePpc)).length
-    setFlash(`Exported ${n} rows → measurements.csv`)
-    setTimeout(() => setFlash(''), 4000)
+    const n = project.captures.filter((c) => metrics(c.border, scaleOf(project, c))).length
+    if (!n) {
+      setFlash('Nothing to export yet — no capture has a saved outline.')
+      setTimeout(() => setFlash(''), 4000)
+      return
+    }
+    try {
+      await window.api.writeFile({ filePath: `${dir}\\measurements.csv`, contents: csvText(project) })
+      setFlash(`Exported ${n} row${n > 1 ? 's' : ''} → measurements.csv`)
+      setTimeout(() => setFlash(''), 4000)
+    } catch (e) {
+      setSaveErr('Export failed: ' + (e as Error).message)
+    }
   }
 
   const capture = openCapId ? project.captures.find((c) => c.id === openCapId) ?? null : null
@@ -169,16 +206,18 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
       </header>
 
       <main className="wrap">
+        {saveErr && <p className="warn">{saveErr}</p>}
         {flash && <p className="flash">{flash}</p>}
 
         {capture && openTp ? (
           <MeasureView dir={dir} project={project} timepoint={openTp} capture={capture}
             onSave={saveMeasurement} onCaptureFrame={captureFrame}
+            onSetProjectScale={(v) => update({ ...project, scalePpc: v })}
             onBack={() => setOpenCapId(null)} />
         ) : openTp ? (
           <TimepointView dir={dir} project={project} timepoint={openTp}
             onOpenCapture={(c) => setOpenCapId(c.id)} onVideoAdded={addCaptureFromVideo}
-            onDeleteCapture={deleteCapture} />
+            onImagesAdded={addCapturesFromImages} onDeleteCapture={deleteCapture} />
         ) : (
           <Timepoints project={project} onAdd={addTimepoint} onRename={renameTimepoint}
             onOpen={setOpenTp} onDelete={deleteTimepoint} />

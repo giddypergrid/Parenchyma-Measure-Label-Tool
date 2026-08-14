@@ -1,4 +1,12 @@
-export type Timepoint = { id: string; name: string; date: string }
+export type Timepoint = {
+  id: string
+  name: string
+  date: string
+  // Folder name, fixed when the timepoint is created. Kept separate from `name`
+  // so renaming never points the app at a different folder, and so two
+  // timepoints whose names clean up to the same string cannot share one.
+  dir?: string
+}
 
 export type Capture = {
   id: string
@@ -8,6 +16,8 @@ export type Capture = {
   diet: string
   quarter?: string          // LF / RF / LR / RR — the udder has four separate glands
   scalePpc?: number         // per-image override, if this clip used a different depth
+  // a still has no frames to scrub, so the measure screen drops its left panel
+  source?: 'video' | 'image'
   framesDir?: string
   videoPath?: string
   framePath?: string

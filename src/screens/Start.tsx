@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Project, ProjectRef } from '../types'
+import { browserNotice } from '../webapi/support'
 
 type Opened = { dir: string; project: Project }
 type Props = { onOpen: (o: Opened) => void }
@@ -9,14 +10,23 @@ export default function Start({ onOpen }: Props) {
   const [name, setName] = useState('')
   const [err, setErr] = useState('')
 
+  // a browser in private mode blocks IndexedDB, which used to fail silently
   useEffect(() => {
-    window.api.listProjects().then(setRecents)
+    window.api
+      .listProjects()
+      .then(setRecents)
+      .catch((e: Error) => setErr(`Could not read the recent-projects list: ${e.message}`))
   }, [])
 
   function handle(result: Awaited<ReturnType<typeof window.api.openProject>>) {
     if (!result) return
     if ('error' in result) return setErr(result.error)
+    setErr('')
     onOpen(result)
+  }
+
+  const guard = (fn: () => Promise<void>) => () => {
+    fn().catch((e: Error) => setErr(e.message))
   }
 
   return (
@@ -29,6 +39,8 @@ export default function Start({ onOpen }: Props) {
       </header>
 
       <main className="wrap start">
+        {browserNotice() && <p className="note small muted">{browserNotice()}</p>}
+
         <section className="card">
           <h2>Your projects</h2>
           {recents.length === 0 ? (
@@ -37,7 +49,8 @@ export default function Start({ onOpen }: Props) {
             <ul className="plist">
               {recents.map((r) => (
                 <li key={r.dir}>
-                  <div className="prow" onClick={async () => handle(await window.api.openProject(r.dir))}>
+                  <div className="prow"
+                    onClick={guard(async () => handle(await window.api.openProject(r.dir)))}>
                     <span className="pname">{r.name}</span>
                     <span className="ppath">{r.dir}</span>
                     <span className="pdate">{new Date(r.lastOpened).toLocaleDateString()}</span>
@@ -57,7 +70,7 @@ export default function Start({ onOpen }: Props) {
               ))}
             </ul>
           )}
-          <button onClick={async () => handle(await window.api.openProject())}>
+          <button onClick={guard(async () => handle(await window.api.openProject()))}>
             Open a project folder…
           </button>
         </section>
@@ -73,7 +86,7 @@ export default function Start({ onOpen }: Props) {
             <button
               className="pri"
               disabled={!name.trim()}
-              onClick={async () => handle(await window.api.createProject(name.trim()))}
+              onClick={guard(async () => handle(await window.api.createProject(name.trim())))}
             >
               Create…
             </button>

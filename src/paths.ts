@@ -23,6 +23,23 @@ export function safeName(name: string): string {
   return (cleaned || 'unnamed').slice(0, 80)
 }
 
+/**
+ * Folder for a timepoint. Timepoints created before `dir` existed fall back to
+ * their cleaned name, which is where their files actually are.
+ */
+export function timepointDir(t: { name: string; dir?: string }): string {
+  return t.dir ?? safeName(t.name)
+}
+
+/** A folder name for `name` that no existing timepoint is already using. */
+export function uniqueTimepointDir(name: string, existing: { name: string; dir?: string }[]) {
+  const taken = new Set(existing.map((t) => timepointDir(t).toLowerCase()))
+  const base = safeName(name)
+  let dir = base
+  for (let n = 2; taken.has(dir.toLowerCase()); n++) dir = `${base}-${n}`
+  return dir
+}
+
 /** absolute -> project-relative, before storing in project.json */
 export function rel(dir: string, p: string): string {
   const d = trimEnd(dir)

@@ -4,6 +4,9 @@ export {}
 
 type Opened = { dir: string; project: Project } | { error: string } | null
 
+/** One still copied into the project — absolute paths, converted to relative by the caller. */
+export type ImportedImage = { clip: string; framesDir: string; imagePath: string }
+
 declare global {
   interface Window {
     api: {
@@ -13,10 +16,12 @@ declare global {
       openProject(dir?: string): Promise<Opened>
       saveProject(o: { dir: string; project: Project }): Promise<boolean>
       pickVideos(): Promise<string[]>
+      pickImages(): Promise<string[]>
       importVideo(o: { videoPath: string; outDir: string; fps?: number }): Promise<{
         videoPath: string
         frames: string[]
       }>
+      importImages(o: { files: string[]; baseDir: string }): Promise<ImportedImage[]>
       listFrames(dirPath: string): Promise<string[]>
       writeFile(o: { filePath: string; contents: string }): Promise<string>
       deleteFolder(o: { projectDir: string; target: string }): Promise<boolean>

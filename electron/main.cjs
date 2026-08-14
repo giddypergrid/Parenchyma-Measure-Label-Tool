@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { safeName, isStill, importImages, listStills } = require('./files.cjs');
 
 // Pin the name so dev and the packaged .exe share one userData folder,
 // otherwise the recent-projects list differs between them.
@@ -80,10 +81,6 @@ ipcMain.handle('forget-project', async (_e, dir) => {
   return true;
 });
 
-// the name becomes a folder, so strip characters Windows rejects
-const safeName = (n) =>
-  (String(n).replace(/[\\/:*?"<>|]/g, '-').replace(/[. ]+$/, '').trim() || 'unnamed').slice(0, 80);
-
 ipcMain.handle('create-project', async (_e, name) => {
   const r = await dialog.showOpenDialog({
     title: 'Where should the project folder go?',
@@ -97,9 +94,11 @@ ipcMain.handle('create-project', async (_e, name) => {
   const project = {
     name,
     createdAt: new Date().toISOString(),
-    // measured off the Mindray depth ruler: 5 minor ticks per cm, 132 px between
-    // the 0 and 1 cm marks. Override per project/image if the depth setting differs.
-    scalePpc: 132.0,
+    // Philips Lumify, measured off the burnt-in depth ruler: ticks every 154.0 px,
+    // and the labelled 0 -> 1 cm span is 308.0 px in every sample. Identical at the
+    // 1.0 cm and 2.5 cm depth settings — depth changes the field of view, not the
+    // scale. (The Mindray used in Vang et al is 132.0.) Calibrate per project.
+    scalePpc: 308.0,
     timepoints: [],
     captures: [],
   };
@@ -160,6 +159,15 @@ ipcMain.handle('pick-videos', async () => {
   return r.canceled ? [] : r.filePaths;
 });
 
+ipcMain.handle('pick-images', async () => {
+  const r = await dialog.showOpenDialog({
+    properties: ['openFile', 'multiSelections'],
+    // only formats Chromium can actually draw — TIFF would import but never display
+    filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'webp'] }],
+  });
+  return r.canceled ? [] : r.filePaths;
+});
+
 function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
     const proc = spawn(ffmpegPath(), args);
@@ -169,8 +177,6 @@ function runFfmpeg(args) {
     proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(err.slice(-600)))));
   });
 }
-
-const isStill = (f) => /\.(png|jpe?g)$/i.test(f);
 
 // Copy the clip into its own folder, then split THAT copy into stills.
 // Keeps every set of stills next to the video it came from.
@@ -185,6 +191,8 @@ ipcMain.handle('import-video', async (_e, { videoPath, outDir, fps = 5 }) => {
   const frames = fs.readdirSync(outDir).filter(isStill).sort().map((f) => path.join(outDir, f));
   return { videoPath: dest, frames };
 });
+
+ipcMain.handle('import-images', async (_e, opts) => importImages(opts));
 
 // Delete a folder, but only ever one INSIDE the project — a path-traversal guard,
 // because this is the one operation that destroys the operator's data.
@@ -205,18 +213,12 @@ ipcMain.handle('write-file', async (_e, { filePath, contents }) => {
 });
 
 // Stills already extracted for a clip
-ipcMain.handle('list-frames', async (_e, dirPath) => {
-  if (!fs.existsSync(dirPath)) return [];
-  return fs
-    .readdirSync(dirPath)
-    .filter((f) => /\.(png|jpe?g)$/i.test(f))
-    .sort()
-    .map((f) => path.join(dirPath, f));
-});
+ipcMain.handle('list-frames', async (_e, dirPath) => listStills(dirPath));
 
 // Renderer can't read file:// directly, so hand it a data URI
 ipcMain.handle('read-image', async (_e, filePath) => {
-  const ext = path.extname(filePath).toLowerCase();
-  const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+  const ext = path.extname(filePath).toLowerCase().slice(1);
+  const mime = { jpg: 'image/jpeg', jpeg: 'image/jpeg', bmp: 'image/bmp', webp: 'image/webp' }[ext]
+    ?? 'image/png';
   return `data:${mime};base64,` + fs.readFileSync(filePath).toString('base64');
 });

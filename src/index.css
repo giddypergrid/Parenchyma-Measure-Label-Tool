@@ -196,3 +196,21 @@ input {
 .prow:hover { background: var(--hover); }
 .prowx { border-left: none; padding: 0 11px; color: #8a1f1f; }
 .prowx:hover:not(:disabled) { background: #f6e7e7; }
+
+/* single still: no video panel, so the canvas takes the full width */
+.measure.single { grid-template-columns: 1fr; }
+.measure.single .canvasbox { min-height: 420px; }
+
+/* batch import: one row per image, confirmed before anything is recorded */
+.modal .box.wide { max-width: 620px; }
+.rowtable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rowtable th {
+  text-align: left; font-size: 10.5px; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--muted); font-weight: 700; padding: 0 6px 5px 0; border-bottom: 1px solid var(--rule);
+}
+.rowtable td { padding: 4px 6px 4px 0; border-bottom: 1px solid var(--rule); }
+.rowtable .fname {
+  font-family: var(--mono); font-size: 11px; max-width: 230px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rowtable tr:last-child td { border-bottom: none; }

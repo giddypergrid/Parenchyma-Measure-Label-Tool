@@ -27,8 +27,18 @@ export default function Timepoints({ project, onAdd, onRename, onOpen, onDelete 
     setDate(t === 'new' ? today() : t.date)
   }
 
+  /**
+   * Two timepoints with the same name are indistinguishable in the chart and in
+   * the CSV, and their folders would collide on disk. Blocked rather than
+   * silently disambiguated.
+   */
+  const clashes = project.timepoints.some(
+    (t) => t.id !== (editing === 'new' ? '' : editing?.id) &&
+      t.name.trim().toLowerCase() === name.trim().toLowerCase(),
+  )
+
   function save() {
-    if (!name.trim()) return
+    if (!name.trim() || clashes) return
     if (editing === 'new') onAdd(name.trim(), date)
     else if (editing) onRename(editing.id, name.trim(), date)
     setEditing(null)
@@ -127,6 +137,7 @@ export default function Timepoints({ project, onAdd, onRename, onOpen, onDelete 
             <div className="field">
               <label>Name</label>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Week 1" autoFocus />
+              {clashes && <span className="overridden">a timepoint is already called that</span>}
             </div>
             <div className="field">
               <label>Date</label>
@@ -134,7 +145,7 @@ export default function Timepoints({ project, onAdd, onRename, onOpen, onDelete 
             </div>
             <div className="row end">
               <button onClick={() => setEditing(null)}>Cancel</button>
-              <button className="pri" disabled={!name.trim()} onClick={save}>Save</button>
+              <button className="pri" disabled={!name.trim() || clashes} onClick={save}>Save</button>
             </div>
           </div>
         </div>

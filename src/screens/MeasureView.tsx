@@ -3,6 +3,7 @@ import { Image as KImage, Layer, Line, Rect, Stage, Text } from 'react-konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Capture, Project, Timepoint } from '../types'
 import { metrics, quarterOf, scaleOf, selfIntersects } from '../measure'
+import { findRuler } from '../ruler'
 import type { Capture as Cap } from '../types'
 import { abs, rel, safeName } from '../paths'
 
@@ -13,6 +14,7 @@ type Props = {
   capture: Capture
   onSave: (captureId: string, patch: Partial<Cap>) => void
   onCaptureFrame: (captureId: string, framePath: string) => void
+  onSetProjectScale: (ppc: number) => void
   onBack: () => void
 }
 
@@ -33,13 +35,16 @@ function haloFor(hex: string) {
 }
 
 export default function MeasureView({
-  dir, project, timepoint, capture, onSave, onCaptureFrame, onBack,
+  dir, project, timepoint, capture, onSave, onCaptureFrame, onSetProjectScale, onBack,
 }: Props) {
+  // a still has nothing to scrub through, so the whole left panel goes away
+  const isImage = capture.source === 'image'
   const [frames, setFrames] = useState<string[]>([])
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [vIdx, setVIdx] = useState(0)                       // scrub position (left panel)
   const [framePath, setFramePath] = useState<string | undefined>(capture.framePath)
   const [img, setImg] = useState<HTMLImageElement | null>(null)
+  const [loadErr, setLoadErr] = useState('')
   const [pts, setPts] = useState<number[][]>(capture.border ?? [])
   const [closed, setClosed] = useState((capture.border?.length ?? 0) >= 3)
   const [calf, setCalf] = useState(capture.calf ?? '')
@@ -50,11 +55,17 @@ export default function MeasureView({
   const [ppcDraft, setPpcDraft] = useState(String(capture.scalePpc ?? project.scalePpc))
   // a display preference, so it lives with the app, not in the study data
   const [colour, setColour] = useState(() => localStorage.getItem('outlineColour') ?? '#14171b')
+  // two clicks on the depth ruler, then the real distance between them
+  const [calib, setCalib] = useState<number[][] | null>(null)
+  const [calibCm, setCalibCm] = useState('1')
+  const [calibTicks, setCalibTicks] = useState(0)   // 0 = the marks were placed by hand
   const halo = haloFor(colour)
   const boxRef = useRef<HTMLDivElement>(null)
   const [boxW, setBoxW] = useState(560)
 
   useEffect(() => {
+    setImg(null)
+    setLoadErr('')
     setFramePath(capture.framePath)
     setPts(capture.border ?? [])
     setClosed((capture.border?.length ?? 0) >= 3)
@@ -67,6 +78,11 @@ export default function MeasureView({
 
   // all stills for this clip, loaded once; the slider scrubs through them
   useEffect(() => {
+    setCalib(null)
+    if (isImage) {
+      setFrames([])
+      return
+    }
     // stored per capture so renaming a timepoint can't orphan its stills
     const d = abs(dir, capture.framesDir ?? `${safeName(timepoint.name)}\\${capture.clip}`)!
     window.api.listFrames(d).then(async (list) => {
@@ -84,13 +100,20 @@ export default function MeasureView({
 
   useEffect(() => {
     if (!framePath) return
+    setLoadErr('')
     const load = (url: string) => {
       const i = new Image()
       i.onload = () => setImg(i)
+      i.onerror = () => setLoadErr(`${framePath} could not be displayed.`)
       i.src = url
     }
     if (urls[framePath]) load(urls[framePath])
-    else window.api.readImage(abs(dir, framePath)!).then(load)
+    else {
+      window.api
+        .readImage(abs(dir, framePath)!)
+        .then(load)
+        .catch(() => setLoadErr(`${framePath} is missing from the project folder.`))
+    }
   }, [framePath, urls])
 
   useEffect(() => {
@@ -136,11 +159,56 @@ export default function MeasureView({
     if (confirm(`Overwrite the quarter for this image only?\n\n` +
       `Project default: ${def || '—'}\nThis image: ${v}`)) setQuarter(v)
   }
-  const m = crossed ? null : metrics(closed ? pts : null, scale_)
+  /**
+   * Scale straight off the image: click two marks on the depth ruler, say how
+   * far apart they really are. Needed because px/cm depends on the scanner and
+   * on the depth setting — a Lumify still at 2.5 cm is nothing like the Mindray.
+   */
+  /** Drop the two markers straight onto the scanner's own tick marks. */
+  function autoCalibrate() {
+    if (!img) return
+    const r = findRuler(img)
+    setCalibTicks(r?.ticks ?? 0)
+    if (!r) {
+      alert('No depth ruler found in this image — click the two marks yourself.')
+      setCalib([])
+      return
+    }
+    setCalib([[r.x, r.first], [r.x, r.last]])
+    setCalibCm('')
+  }
 
-  const overlay = m
-    ? `AREA ${m.area.toFixed(2)} mm²   W ${m.width.toFixed(2)}   D ${m.depth.toFixed(2)}   scale ${scale_} px/cm`
-    : `click around the parenchyma · click the first dot to close   ·   scale ${scale_} px/cm`
+  function applyCalibration(scope: 'image' | 'project') {
+    const [a, b] = calib!
+    const cm = Number(calibCm)
+    const px = Math.hypot(a[0] - b[0], a[1] - b[1])
+    if (!cm || px < 5) return
+    const value = Number((px / cm).toFixed(1))
+    if (scope === 'project') {
+      onSetProjectScale(value)
+      setPpc(undefined)
+    } else {
+      setPpc(value)
+    }
+    setPpcDraft(String(value))
+    setCalib(null)
+  }
+
+  const m = crossed ? null : metrics(closed ? pts : null, scale_)
+  // outlines that would move if the project scale changed — excludes overrides
+  const measuredCount = project.captures.filter(
+    (c) => c.border && c.border.length >= 3 && c.scalePpc === undefined,
+  ).length
+  // identity edits are worth saving on their own, without an outline
+  const idDirty =
+    calf.trim() !== (capture.calf ?? '') || diet.trim() !== (capture.diet ?? '') ||
+    quarter !== capture.quarter || ppc !== capture.scalePpc
+
+  const overlay = calib
+    ? `CALIBRATING — click two marks on the depth ruler (${calib.length}/2)`
+    : m
+      ? `AREA ${m.area.toFixed(2)} mm²   W ${m.width.toFixed(2)}   D ${m.depth.toFixed(2)}   scale ${scale_} px/cm`
+      : `click around the parenchyma · click the first dot to close   ·   scale ${scale_} px/cm`
 
   function capture_() {
     const p = frames[vIdx]
@@ -153,10 +221,15 @@ export default function MeasureView({
   }
 
   function onStageDown(e: KonvaEventObject<MouseEvent>) {
-    if (e.target.getClassName() !== 'Image' || closed) return
+    if (e.target.getClassName() !== 'Image') return
     const pos = e.target.getStage()?.getPointerPosition()
     if (!pos) return
     const p = [pos.x / scale, pos.y / scale]
+    if (calib) {
+      if (calib.length < 2) setCalib([...calib, p])
+      return
+    }
+    if (closed) return
     if (pts.length >= 3) {
       const d = Math.hypot((pts[0][0] - p[0]) * scale, (pts[0][1] - p[1]) * scale)
       if (d < 9) return setClosed(true)
@@ -214,29 +287,36 @@ export default function MeasureView({
         ) : (
           <span className="muted small">project default — type a value and press Enter to override</span>
         )}
+        <button onClick={() => (calib ? setCalib(null) : autoCalibrate())} disabled={!img}>
+          {calib ? 'Cancel calibration' : 'Calibrate from ruler…'}
+        </button>
       </div>
 
-      <div className="measure">
-        {/* LEFT: scrub the clip */}
-        <div>
-          <div className="plabel">1 · Original video — drag to a clear frame</div>
-          <div className="vbox">{scrubUrl && <img src={scrubUrl} alt="video frame" />}</div>
-          <div className="vscrub">
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, frames.length - 1)}
-              value={vIdx}
-              onChange={(e) => setVIdx(Number(e.target.value))}
-            />
-            <span className="flab">frame {frames.length ? vIdx + 1 : 0} / {frames.length}</span>
-            <button className="pri" onClick={capture_} disabled={!frames.length}>Capture ▸</button>
+      <div className={'measure' + (isImage ? ' single' : '')}>
+        {/* LEFT: scrub the clip — a still has no frames to scrub */}
+        {!isImage && (
+          <div>
+            <div className="plabel">1 · Original video — drag to a clear frame</div>
+            <div className="vbox">{scrubUrl && <img src={scrubUrl} alt="video frame" />}</div>
+            <div className="vscrub">
+              <input
+                type="range"
+                min={0}
+                max={Math.max(0, frames.length - 1)}
+                value={vIdx}
+                onChange={(e) => setVIdx(Number(e.target.value))}
+              />
+              <span className="flab">frame {frames.length ? vIdx + 1 : 0} / {frames.length}</span>
+              <button className="pri" onClick={capture_} disabled={!frames.length}>Capture ▸</button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* RIGHT: draw on the captured still */}
         <div>
-          <div className="plabel">2 · Captured image — draw the outline</div>
+          <div className="plabel">
+            {isImage ? 'Image — draw the outline' : '2 · Captured image — draw the outline'}
+          </div>
           <div className="canvasbox" ref={boxRef}>
             {img ? (
               <Stage width={stageW} height={stageH} onMouseDown={onStageDown}>
@@ -255,13 +335,23 @@ export default function MeasureView({
                       hitStrokeWidth={8} /* small enough to pack 30 dots, still grabbable */
                       onDragMove={(e) => moveVertex(i, e.target.x() + 1.5, e.target.y() + 1.5)} />
                   ))}
+                  {calib?.map((p, i) => (
+                    <Rect key={'c' + i} x={p[0] * scale - 4} y={p[1] * scale - 4} width={8} height={8}
+                      fill="#e23b2e" stroke="#ffffff" strokeWidth={1} />
+                  ))}
+                  {calib?.length === 2 && (
+                    <Line points={calib.flatMap((p) => [p[0] * scale, p[1] * scale])}
+                      stroke="#e23b2e" strokeWidth={1.5} />
+                  )}
                   <Rect x={0} y={0} width={stageW} height={26} fill="rgba(255,255,255,0.92)" />
                   <Text x={8} y={7} text={overlay} fontSize={13}
                     fontFamily="Cascadia Mono, Consolas, monospace" fill="#14171b" />
                 </Layer>
               </Stage>
             ) : (
-              <span className="nocap">Drag the video, then press Capture.</span>
+              <span className="nocap">
+                {loadErr || (isImage ? 'Loading the image…' : 'Drag the video, then press Capture.')}
+              </span>
             )}
           </div>
           <div className="mtools">
@@ -280,17 +370,63 @@ export default function MeasureView({
             <button onClick={() => { setPts(pts.slice(0, -1)); setClosed(false) }} disabled={!pts.length}>Undo</button>
             <button onClick={() => setClosed(true)} disabled={pts.length < 3 || closed}>Close loop</button>
             <button onClick={() => { setPts([]); setClosed(false) }} disabled={!pts.length}>Clear</button>
-            <button className="pri" disabled={!m || !framePath}
+            <button className="pri" disabled={!framePath || (!m && !idDirty)}
               onClick={() => onSave(capture.id, {
-                border: pts, framePath, calf: calf.trim(), diet: diet.trim(),
+                // an unmeasured capture can still have its identity corrected;
+                // saving must not then write an empty border over nothing
+                ...(m ? { border: pts } : {}),
+                framePath, calf: calf.trim(), diet: diet.trim(),
                 quarter: qOverridden ? quarter : undefined,
                 scalePpc: overridden ? ppc : undefined,
               })}>
-              Save measurement
+              {m ? 'Save measurement' : 'Save details'}
             </button>
           </div>
         </div>
       </div>
+
+      {calib?.length === 2 && (
+        <div className="modal">
+          <div className="box">
+            <h2>How far apart are those two marks?</h2>
+            <p className="muted small" style={{ marginTop: -8 }}>
+              {Math.hypot(calib[0][0] - calib[1][0], calib[0][1] - calib[1][1]).toFixed(1)} pixels
+              between them.
+              {calibTicks > 0 && ` Found ${calibTicks} evenly spaced ruler marks — the line spans
+                ${calibTicks - 1} gap${calibTicks > 2 ? 's' : ''}, so if each gap is 0.5 cm the
+                answer is ${((calibTicks - 1) * 0.5).toFixed(1)}.`}
+            </p>
+            <div className="field">
+              <label>Real distance</label>
+              <div className="row">
+                <input type="number" step="0.1" min="0.1" value={calibCm} autoFocus
+                  onChange={(e) => setCalibCm(e.target.value)} style={{ width: 90 }} />
+                <span className="muted small">
+                  cm  ·  = {(Math.hypot(calib[0][0] - calib[1][0], calib[0][1] - calib[1][1]) /
+                    (Number(calibCm) || 1)).toFixed(1)} px/cm
+                </span>
+              </div>
+            </div>
+            <div className="row end">
+              <button onClick={() => { setCalib([]); setCalibTicks(0) }}>Pick them myself</button>
+              <button onClick={() => applyCalibration('image')} disabled={!Number(calibCm)}>
+                This image only
+              </button>
+              <button className="pri" onClick={() => applyCalibration('project')}
+                disabled={!Number(calibCm)}>
+                Set as project default
+              </button>
+            </div>
+            <p className="muted small" style={{ margin: '10px 0 0' }}>
+              Every image from the same scanner shares one scale, so the project default is
+              usually the right choice.
+              {measuredCount > 0 && ` It also re-scales the ${measuredCount} measurement` +
+                `${measuredCount > 1 ? 's' : ''} already saved in this project — correct if they ` +
+                `were taken with the wrong scale, wrong if they were not.`}
+            </p>
+          </div>
+        </div>
+      )}
     </>
   )
 }
