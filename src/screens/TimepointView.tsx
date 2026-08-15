@@ -6,11 +6,16 @@ import { onImportProgress } from '../webapi/support'
 
 const FPS = 5 // stills per second of video
 
-/** One still, waiting for the operator to confirm whose gland it is. */
-export type ImageEntry = {
+/**
+ * One imported file waiting for the operator to confirm whose gland it is.
+ * Stills and clips share this: a clip additionally carries videoPath, and its
+ * framePath is the first extracted still.
+ */
+export type ImportEntry = {
   clip: string
   framesDir: string
-  imagePath: string
+  framePath: string
+  videoPath?: string
   calf: string
   diet: string
   quarter: string
@@ -21,11 +26,7 @@ type Props = {
   project: Project
   timepoint: Timepoint
   onOpenCapture: (c: Capture) => void
-  onVideoAdded: (
-    clip: string, firstFrame: string, framesDir: string, videoPath: string,
-    calf: string, diet: string, quarter: string,
-  ) => void
-  onImagesAdded: (entries: ImageEntry[]) => void
+  onImported: (entries: ImportEntry[]) => void
   onDeleteCapture: (id: string) => void
 }
 
@@ -56,19 +57,20 @@ function guessQuarter(clip: string) {
   return m ? QUARTER_BY_NUMBER[m[1]] : ''
 }
 
-type Pending = { clip: string; firstFrame: string; framesDir: string; videoPath: string }
+/** Fields the operator has not filled in yet, given a freshly imported file. */
+const suggest = (clip: string, defaultQuarter?: string) => ({
+  calf: guessCalf(clip),
+  diet: '',
+  quarter: guessQuarter(clip) || defaultQuarter || '',
+})
 
 export default function TimepointView({
-  dir, project, timepoint, onOpenCapture, onVideoAdded, onImagesAdded, onDeleteCapture,
+  dir, project, timepoint, onOpenCapture, onImported, onDeleteCapture,
 }: Props) {
   const caps = project.captures.filter((c) => c.timepointId === timepoint.id)
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState('')
-  const [pending, setPending] = useState<Pending | null>(null)
-  const [calf, setCalf] = useState('')
-  const [diet, setDiet] = useState('')
-  const [quarter, setQuarter] = useState('')
-  const [rows, setRows] = useState<ImageEntry[] | null>(null)
+  const [rows, setRows] = useState<ImportEntry[] | null>(null)
 
   // One thumbnail per capture. Settled per file, not all-or-nothing: one image
   // missing from disk used to reject the batch and leave every tile blank.
@@ -100,40 +102,7 @@ export default function TimepointView({
 
   const tpDir = `${dir}\\${timepointDir(timepoint)}`
 
-  // add a clip -> split it -> jump straight into the split screen on the first still
-  async function addVideo() {
-    const files = await window.api.pickVideos()
-    if (!files.length) return
-    const video = files[0]
-    let clip = safeName(video.split(/[\\/]/).pop()!.replace(/\.[^.]+$/, ''))
-
-    // re-importing the same clip would wipe the stills the existing capture points at
-    if (caps.some((c) => c.clip === clip)) {
-      if (!confirm(`"${clip}" is already in ${timepoint.name}. Import it again as a second copy?`))
-        return
-      let n = 2
-      while (caps.some((c) => c.clip === `${clip}-${n}`)) n++
-      clip = `${clip}-${n}`
-    }
-
-    setBusy('Copying clip and extracting stills…')
-    try {
-      // each clip gets its own folder under the timepoint: video + its stills together
-      const res = await window.api.importVideo({ videoPath: video, outDir: `${tpDir}\\${clip}`, fps: FPS })
-      if (!res.frames.length) throw new Error('no stills were produced')
-      // nothing is recorded until the operator confirms who this clip belongs to
-      setPending({ clip, firstFrame: res.frames[0], framesDir: `${tpDir}\\${clip}`, videoPath: res.videoPath })
-      setCalf(guessCalf(clip))
-      setDiet('')
-      setQuarter(project.defaultQuarter ?? '')
-    } catch (e) {
-      alert('Import failed: ' + (e as Error).message)
-    } finally {
-      setBusy('')
-    }
-  }
-
-  /** Stills come in as a batch: copy them all, then confirm every row at once. */
+  /** Stills: copy them all in one go, then confirm every row at once. */
   async function addImages() {
     const files = await window.api.pickImages()
     if (!files.length) return
@@ -141,10 +110,8 @@ export default function TimepointView({
     try {
       const imported = await window.api.importImages({ files, baseDir: tpDir })
       setRows(imported.map((im) => ({
-        ...im,
-        calf: guessCalf(im.clip),
-        diet: '',
-        quarter: guessQuarter(im.clip) || project.defaultQuarter || '',
+        clip: im.clip, framesDir: im.framesDir, framePath: im.imagePath,
+        ...suggest(im.clip, project.defaultQuarter),
       })))
     } catch (e) {
       alert('Import failed: ' + (e as Error).message)
@@ -153,12 +120,49 @@ export default function TimepointView({
     }
   }
 
-  function editRow(i: number, patch: Partial<ImageEntry>) {
+  /**
+   * Clips, same batch flow. Each is split in turn — that is the slow part, so
+   * the progress line names the clip being worked on. A clip that will not
+   * decode is reported and skipped rather than losing the whole batch.
+   */
+  async function addVideos() {
+    const files = await window.api.pickVideos()
+    if (!files.length) return
+    const taken = new Set(caps.map((c) => c.clip))
+    const done: ImportEntry[] = []
+    const failed: string[] = []
+
+    for (const [i, video] of files.entries()) {
+      const base = safeName(video.split(/[\\/]/).pop()!.replace(/\.[^.]+$/, ''))
+      let clip = base
+      for (let n = 2; taken.has(clip); n++) clip = `${base}-${n}`
+      taken.add(clip)
+
+      setBusy(`Clip ${i + 1} of ${files.length} — extracting stills from ${clip}…`)
+      try {
+        const outDir = `${tpDir}\\${clip}`
+        const res = await window.api.importVideo({ videoPath: video, outDir, fps: FPS })
+        if (!res.frames.length) throw new Error('no stills were produced')
+        done.push({
+          clip, framesDir: outDir, framePath: res.frames[0], videoPath: res.videoPath,
+          ...suggest(clip, project.defaultQuarter),
+        })
+      } catch (e) {
+        failed.push(`${clip}: ${(e as Error).message}`)
+      }
+    }
+
+    setBusy('')
+    if (failed.length) alert(`Could not import:\n\n${failed.join('\n')}`)
+    if (done.length) setRows(done)
+  }
+
+  function editRow(i: number, patch: Partial<ImportEntry>) {
     setRows((rs) => rs && rs.map((r, n) => (n === i ? { ...r, ...patch } : r)))
   }
 
   /** Backing out must not leave orphan copies behind in the project folder. */
-  async function discardRows(dropped: ImageEntry[]) {
+  async function discardRows(dropped: ImportEntry[]) {
     for (const r of dropped) {
       try {
         await window.api.deleteFolder({
@@ -175,7 +179,7 @@ export default function TimepointView({
    * legitimate) but flagged, because it silently doubles that animal's weight in
    * the timepoint average. The sample set contains exactly this case.
    */
-  function duplicateOf(r: ImageEntry, i: number) {
+  function duplicateOf(r: ImportEntry, i: number) {
     const key = (calfId: string, q: string) => `${calfId.trim().toLowerCase()}|${q}`
     if (!r.calf.trim()) return ''
     const mine = key(r.calf, r.quarter)
@@ -194,8 +198,8 @@ export default function TimepointView({
           {timepoint.name} <span className="muted small">{timepoint.date}</span>
         </h2>
         <div className="row">
-          <button onClick={addImages} disabled={!!busy}>+ Add images…</button>
-          <button className="pri" onClick={addVideo} disabled={!!busy}>+ Add video…</button>
+          <button onClick={addVideos} disabled={!!busy}>+ Add videos…</button>
+          <button className="pri" onClick={addImages} disabled={!!busy}>+ Add images…</button>
         </div>
       </div>
 
@@ -205,12 +209,12 @@ export default function TimepointView({
         <div className="empty">
           <p>Nothing in this timepoint yet.</p>
           <p className="muted small">
-            Add still images to measure them directly, or add a clip — it is split into stills
-            so you can pick the clearest frame.
+            Add images to measure them directly, or add clips — each is split into stills so you
+            can pick the clearest frame. Select as many files at once as you like.
           </p>
           <div className="row" style={{ justifyContent: 'center' }}>
-            <button className="big" onClick={addImages}>+ Add images…</button>
-            <button className="pri big" onClick={addVideo}>+ Add video…</button>
+            <button className="big" onClick={addVideos}>+ Add videos…</button>
+            <button className="pri big" onClick={addImages}>+ Add images…</button>
           </div>
         </div>
       )}
@@ -245,60 +249,10 @@ export default function TimepointView({
         </div>
       )}
 
-      {pending && (
-        <div className="modal">
-          <div className="box">
-            <h2>Which animal is this clip?</h2>
-            <p className="muted small" style={{ marginTop: -8 }}>
-              <b>{pending.clip}</b> — recorded against these details, not the filename.
-            </p>
-            <div className="field">
-              <label>Calf id</label>
-              <input value={calf} onChange={(e) => setCalf(e.target.value)}
-                placeholder="e.g. 3112" autoFocus />
-              <span className="muted small">
-                {guessCalf(pending.clip)
-                  ? 'suggested from the filename — check it is right'
-                  : 'no id found in the filename — type it in'}
-              </span>
-            </div>
-            <div className="field">
-              <label>Diet</label>
-              <select value={diet} onChange={(e) => setDiet(e.target.value)}>
-                <option value="">—</option>
-                {DIETS.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Quarter</label>
-              <select value={quarter} onChange={(e) => setQuarter(e.target.value)}>
-                <option value="">—</option>
-                {QUARTERS.map((q) => <option key={q} value={q}>{q}</option>)}
-              </select>
-            </div>
-            <div className="row end">
-              <button onClick={() => setPending(null)}>Cancel</button>
-              <button className="pri" disabled={!calf.trim() || !diet}
-                onClick={() => {
-                  onVideoAdded(pending.clip, pending.firstFrame, pending.framesDir,
-                    pending.videoPath, calf.trim(), diet, quarter)
-                  setPending(null)
-                }}>
-                Add capture
-              </button>
-            </div>
-            <p className="muted small" style={{ margin: '10px 0 0' }}>
-              Calf id and diet are required — without them the measurement cannot be
-              grouped in the chart or the CSV.
-            </p>
-          </div>
-        </div>
-      )}
-
       {rows && (
         <div className="modal">
           <div className="box wide">
-            <h2>Which animal is each image?</h2>
+            <h2>Which animal is each {rows.some((r) => r.videoPath) ? 'file' : 'image'}?</h2>
             <p className="muted small" style={{ marginTop: -8 }}>
               Calf id and quarter are read from the filename as a suggestion. Check every row —
               this is what gets recorded, not the filename.
@@ -315,7 +269,7 @@ export default function TimepointView({
 
             <table className="rowtable">
               <thead>
-                <tr><th>Image</th><th>Calf id</th><th>Quarter</th><th>Diet</th><th /></tr>
+                <tr><th>File</th><th>Calf id</th><th>Quarter</th><th>Diet</th><th /></tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (
@@ -359,7 +313,7 @@ export default function TimepointView({
             <div className="row end">
               <button onClick={() => { discardRows(rows); setRows(null) }}>Cancel</button>
               <button className="pri" disabled={!rowsReady}
-                onClick={() => { onImagesAdded(rows); setRows(null) }}>
+                onClick={() => { onImported(rows); setRows(null) }}>
                 Add {rows.length} capture{rows.length > 1 ? 's' : ''}
               </button>
             </div>

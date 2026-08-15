@@ -4,7 +4,7 @@ import type { Capture } from '../types'
 import { metrics, quarterOf, scaleOf } from '../measure'
 import { rel, timepointDir, uniqueTimepointDir } from '../paths'
 import Timepoints from './Timepoints'
-import TimepointView, { type ImageEntry } from './TimepointView'
+import TimepointView, { type ImportEntry } from './TimepointView'
 import MeasureView from './MeasureView'
 
 type Props = { dir: string; project: Project; onClose: () => void }
@@ -70,36 +70,21 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
     })
   }
 
-  /** A freshly added clip becomes a capture and opens straight into the split screen. */
-  /** Identity comes from what the operator confirmed at import, never from the filename. */
-  function addCaptureFromVideo(
-    clip: string, firstFrame: string, framesDir: string, videoPath: string,
-    calf: string, diet: string, quarter: string,
-  ) {
-    if (!openTp) return
-    const id = newId()
-    update({
-      ...project,
-      captures: [...project.captures, {
-        id, timepointId: openTp.id, clip, calf, diet,
-        quarter: quarter && quarter !== project.defaultQuarter ? quarter : undefined,
-        // stored relative so the project folder stays portable
-        source: 'video',
-        framesDir: rel(dir, framesDir), videoPath: rel(dir, videoPath),
-        framePath: rel(dir, firstFrame), border: null,
-      }],
-    })
-    setOpenCapId(id)
-  }
-
-  /** Stills arrive as a confirmed batch; a single one opens straight into measuring. */
-  function addCapturesFromImages(entries: ImageEntry[]) {
+  /**
+   * Images and clips arrive as one confirmed batch. Identity comes from what the
+   * operator approved at import, never from the filename. A single file opens
+   * straight into measuring; a batch leaves you on the grid to pick from.
+   */
+  function addCaptures(entries: ImportEntry[]) {
     if (!openTp || !entries.length) return
     const added: Capture[] = entries.map((e) => ({
       id: newId(), timepointId: openTp.id, clip: e.clip, calf: e.calf.trim(), diet: e.diet,
       quarter: e.quarter && e.quarter !== project.defaultQuarter ? e.quarter : undefined,
-      source: 'image',
-      framesDir: rel(dir, e.framesDir), framePath: rel(dir, e.imagePath), border: null,
+      source: e.videoPath ? 'video' : 'image',
+      // stored relative so the project folder stays portable
+      framesDir: rel(dir, e.framesDir), framePath: rel(dir, e.framePath),
+      videoPath: e.videoPath ? rel(dir, e.videoPath) : undefined,
+      border: null,
     }))
     update({ ...project, captures: [...project.captures, ...added] })
     if (added.length === 1) setOpenCapId(added[0].id)
@@ -216,8 +201,8 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
             onBack={() => setOpenCapId(null)} />
         ) : openTp ? (
           <TimepointView dir={dir} project={project} timepoint={openTp}
-            onOpenCapture={(c) => setOpenCapId(c.id)} onVideoAdded={addCaptureFromVideo}
-            onImagesAdded={addCapturesFromImages} onDeleteCapture={deleteCapture} />
+            onOpenCapture={(c) => setOpenCapId(c.id)} onImported={addCaptures}
+            onDeleteCapture={deleteCapture} />
         ) : (
           <Timepoints project={project} onAdd={addTimepoint} onRename={renameTimepoint}
             onOpen={setOpenTp} onDelete={deleteTimepoint} />
