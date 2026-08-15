@@ -58,7 +58,7 @@ export default function MeasureView({
   // two clicks on the depth ruler, then the real distance between them
   const [calib, setCalib] = useState<number[][] | null>(null)
   const [calibCm, setCalibCm] = useState('1')
-  const [calibTicks, setCalibTicks] = useState(0)   // 0 = the marks were placed by hand
+  const [calibSpans, setCalibSpans] = useState(0)   // 0 = the marks were placed by hand
   const halo = haloFor(colour)
   const boxRef = useRef<HTMLDivElement>(null)
   const [boxW, setBoxW] = useState(560)
@@ -168,7 +168,7 @@ export default function MeasureView({
   function autoCalibrate() {
     if (!img) return
     const r = findRuler(img)
-    setCalibTicks(r?.ticks ?? 0)
+    setCalibSpans(r?.spans ?? 0)
     if (!r) {
       alert('No depth ruler found in this image — click the two marks yourself.')
       setCalib([])
@@ -392,9 +392,9 @@ export default function MeasureView({
             <p className="muted small" style={{ marginTop: -8 }}>
               {Math.hypot(calib[0][0] - calib[1][0], calib[0][1] - calib[1][1]).toFixed(1)} pixels
               between them.
-              {calibTicks > 0 && ` Found ${calibTicks} evenly spaced ruler marks — the line spans
-                ${calibTicks - 1} gap${calibTicks > 2 ? 's' : ''}, so if each gap is 0.5 cm the
-                answer is ${((calibTicks - 1) * 0.5).toFixed(1)}.`}
+              {calibSpans > 0 && ` The line spans ${calibSpans} ruler
+                gap${calibSpans > 1 ? 's' : ''}, so if each gap is 0.5 cm the answer is
+                ${(calibSpans * 0.5).toFixed(1)}.`}
             </p>
             <div className="field">
               <label>Real distance</label>
@@ -408,7 +408,7 @@ export default function MeasureView({
               </div>
             </div>
             <div className="row end">
-              <button onClick={() => { setCalib([]); setCalibTicks(0) }}>Pick them myself</button>
+              <button onClick={() => { setCalib([]); setCalibSpans(0) }}>Pick them myself</button>
               <button onClick={() => applyCalibration('image')} disabled={!Number(calibCm)}>
                 This image only
               </button>
