@@ -102,7 +102,7 @@ export default function Timepoints({ project, onAdd, onRename, onOpen, onDelete 
         </div>
 
         <div className="card chartcard">
-          <h2>Parenchymal area by timepoint (mm²)</h2>
+          <h2>Parenchymal area by timepoint (cm²)</h2>
           {hasData ? (
             <div style={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -110,7 +110,7 @@ export default function Timepoints({ project, onAdd, onRename, onOpen, onDelete 
                   <CartesianGrid stroke="#d2d4d7" vertical={false} />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#565b62" />
                   <YAxis tick={{ fontSize: 11 }} stroke="#565b62" />
-                  <Tooltip formatter={(v) => `${Number(v).toFixed(1)} mm²`} />
+                  <Tooltip formatter={(v) => `${Number(v).toFixed(4)} cm²`} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   {diets.map((d, i) => (
                     <Line key={d} type="linear" dataKey={d} name={d} stroke="#14171b"

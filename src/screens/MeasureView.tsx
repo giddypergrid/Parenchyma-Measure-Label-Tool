@@ -207,7 +207,7 @@ export default function MeasureView({
   const overlay = calib
     ? `CALIBRATING — click two marks on the depth ruler (${calib.length}/2)`
     : m
-      ? `AREA ${m.area.toFixed(2)} mm²   W ${m.width.toFixed(2)} mm   D ${m.depth.toFixed(2)} mm   scale ${scale_} px/cm`
+      ? `AREA ${m.area.toFixed(4)} cm²   W ${m.width.toFixed(3)} cm   D ${m.depth.toFixed(3)} cm   scale ${scale_} px/cm`
       : `click around the parenchyma · click the first dot to close   ·   scale ${scale_} px/cm`
 
   function capture_() {
@@ -359,8 +359,8 @@ export default function MeasureView({
               {crossed
                 ? 'outline crosses itself — the area would be wrong; drag a point to untangle it'
                 : m
-                  ? `${m.area.toFixed(2)} mm²  ·  w ${m.width.toFixed(2)} mm (${(m.width / 10).toFixed(3)} cm)` +
-                    `  ·  d ${m.depth.toFixed(2)} mm (${(m.depth / 10).toFixed(3)} cm)  ·  ${pts.length} dots`
+                  ? `${m.area.toFixed(4)} cm²  ·  w ${m.width.toFixed(3)} cm  ·  d ${m.depth.toFixed(3)} cm` +
+                    `  ·  ${pts.length} dots`
                   : '—'}
             </span>
             <select value={colour} title="outline colour"

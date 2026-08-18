@@ -38,15 +38,18 @@ export const quarterOf = (
   capture: { quarter?: string },
 ) => capture.quarter ?? project.defaultQuarter ?? ''
 
-/** Border is in image pixels; ppc = pixels per cm from the depth ruler. */
+/**
+ * Border is in image pixels; ppc = pixels per cm from the depth ruler.
+ * Returned in centimetres, matching what the scanner puts on screen.
+ */
 export function metrics(border: number[][] | null | undefined, ppc: number) {
   if (!border || border.length < 3) return null
-  const mm = 10 / ppc
+  const cm = 1 / ppc
   const xs = border.map((p) => p[0])
   const ys = border.map((p) => p[1])
   return {
-    area: shoelace(border) * mm * mm,
-    width: (Math.max(...xs) - Math.min(...xs)) * mm,
-    depth: (Math.max(...ys) - Math.min(...ys)) * mm,
+    area: shoelace(border) * cm * cm,
+    width: (Math.max(...xs) - Math.min(...xs)) * cm,
+    depth: (Math.max(...ys) - Math.min(...ys)) * cm,
   }
 }

@@ -17,7 +17,7 @@ const cell = (v: unknown) => {
 
 function csvText(project: Project) {
   const head = ['calf_id', 'quarter', 'timepoint', 'date', 'diet', 'clip', 'frame',
-    'area_mm2', 'width_mm', 'depth_mm', 'scale_px_per_cm'].join(',')
+    'area_cm2', 'width_cm', 'depth_cm', 'scale_px_per_cm'].join(',')
   const byId = Object.fromEntries(project.timepoints.map((t) => [t.id, t]))
   const rows = project.captures.flatMap((c) => {
     const ppc = scaleOf(project, c)          // per-image scale, if it has one
@@ -28,7 +28,7 @@ function csvText(project: Project) {
     const frame = c.framePath?.split(/[\\/]/).pop() ?? ''
     return [[c.calf, quarterOf(project, c), t?.name ?? '', t?.date ?? '', c.diet, c.clip, frame,
       // 3 dp in the export so no precision is lost before analysis
-      m.area.toFixed(3), m.width.toFixed(3), m.depth.toFixed(3), ppc]
+      m.area.toFixed(4), m.width.toFixed(4), m.depth.toFixed(4), ppc]
       .map(cell).join(',')]
   })
   return [head, ...rows].join('\n')
@@ -218,7 +218,7 @@ export default function ProjectView({ dir, project: initial, onClose }: Props) {
               <div className="row">
                 <input type="number" step="0.1" value={ppc} onChange={(e) => setPpc(e.target.value)}
                   style={{ width: 110 }} />
-                <span className="muted small">= {(10 / (Number(ppc) || 132)).toFixed(4)} mm per pixel</span>
+                <span className="muted small">= {(1 / (Number(ppc) || 308)).toFixed(5)} cm per pixel</span>
               </div>
             </div>
             <p className="muted small">
