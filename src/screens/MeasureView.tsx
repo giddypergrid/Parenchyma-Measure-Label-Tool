@@ -207,7 +207,7 @@ export default function MeasureView({
   const overlay = calib
     ? `CALIBRATING — click two marks on the depth ruler (${calib.length}/2)`
     : m
-      ? `AREA ${m.area.toFixed(2)} mm²   W ${m.width.toFixed(2)}   D ${m.depth.toFixed(2)}   scale ${scale_} px/cm`
+      ? `AREA ${m.area.toFixed(2)} mm²   W ${m.width.toFixed(2)} mm   D ${m.depth.toFixed(2)} mm   scale ${scale_} px/cm`
       : `click around the parenchyma · click the first dot to close   ·   scale ${scale_} px/cm`
 
   function capture_() {
@@ -285,7 +285,7 @@ export default function MeasureView({
             </button>
           </>
         ) : (
-          <span className="muted small">project default — type a value and press Enter to override</span>
+          <span className="muted small">project default — mark 2 points on the ruler to adjust</span>
         )}
         <button onClick={() => (calib ? setCalib(null) : autoCalibrate())} disabled={!img}>
           {calib ? 'Cancel calibration' : 'Calibrate from ruler…'}
@@ -359,7 +359,8 @@ export default function MeasureView({
               {crossed
                 ? 'outline crosses itself — the area would be wrong; drag a point to untangle it'
                 : m
-                  ? `${m.area.toFixed(2)} mm² · w ${m.width.toFixed(2)} · d ${m.depth.toFixed(2)} · ${pts.length} dots`
+                  ? `${m.area.toFixed(2)} mm²  ·  w ${m.width.toFixed(2)} mm (${(m.width / 10).toFixed(3)} cm)` +
+                    `  ·  d ${m.depth.toFixed(2)} mm (${(m.depth / 10).toFixed(3)} cm)  ·  ${pts.length} dots`
                   : '—'}
             </span>
             <select value={colour} title="outline colour"
@@ -401,10 +402,13 @@ export default function MeasureView({
               <div className="row">
                 <input type="number" step="0.1" min="0.1" value={calibCm} autoFocus
                   onChange={(e) => setCalibCm(e.target.value)} style={{ width: 90 }} />
-                <span className="muted small">
-                  cm  ·  = {(Math.hypot(calib[0][0] - calib[1][0], calib[0][1] - calib[1][1]) /
-                    (Number(calibCm) || 1)).toFixed(1)} px/cm
-                </span>
+                <span className="muted small">cm</span>
+                {Number(calibCm) > 0 && (
+                  <span className="muted small">
+                    gives {(Math.hypot(calib[0][0] - calib[1][0], calib[0][1] - calib[1][1]) /
+                      Number(calibCm)).toFixed(1)} px/cm
+                  </span>
+                )}
               </div>
             </div>
             <div className="row end">
