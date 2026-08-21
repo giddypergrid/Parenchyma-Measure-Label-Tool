@@ -47,10 +47,10 @@ function guessCalf(clip: string) {
 
 /**
  * Lumify filenames number the gland ("Calf 2 Qtr 3") rather than naming it.
- * This is the conventional order and is shown in the import dialog for the
- * operator to correct — nothing is recorded until they confirm the row.
+ * Numbering confirmed with Kate, 21 Aug 2026. Shown in the import dialog for
+ * the operator to correct — nothing is recorded until they confirm the row.
  */
-const QUARTER_BY_NUMBER: Record<string, string> = { 1: 'LF', 2: 'RF', 3: 'LR', 4: 'RR' }
+const QUARTER_BY_NUMBER: Record<string, string> = { 1: 'LF', 2: 'LR', 3: 'RR', 4: 'RF' }
 
 function guessQuarter(clip: string) {
   const m = clip.match(/q(?:tr|uarter)?[\s_-]*([1-4])\b/i)
