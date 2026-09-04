@@ -1,67 +1,50 @@
 # Parenchyma Measure
 
-Desktop tool for measuring mammary parenchyma from ultrasound video of dairy heifer calves.
+**Open it at
+[giddypergrid.github.io/Parenchyma-Measure-Label-Tool](https://giddypergrid.github.io/Parenchyma-Measure-Label-Tool/)**
 
-An ultrasound clip is split into still images; the operator picks a clear frame, draws the
-tissue outline, and the tool computes **area, width and depth in millimetres** and exports a CSV.
-Frame choice and outlining stay manual — the tool handles scaling, measurement and
-record-keeping, and stores every outline so a segmentation model can be trained later.
+A browser tool for measuring mammary parenchyma from ultrasound scans of dairy heifer calves. Built
+for the mammary gland development research of A/Prof Racheal Bryant at Lincoln University, and in
+weekly use by her group.
 
-Built for the mammary gland development research of Racheal Bryant, Lincoln University,
-New Zealand.
-
-## Requirements
-
-- Windows
-- Node.js 20+
-
-ffmpeg is bundled, so `.avi` clips from the scanner work without installing anything.
-
-## Setup
-
-```bash
-npm install
-npm run dev      # opens the app window, hot reloads on save
-```
-
-`npm run dev` opens its own desktop window. The `localhost:5173` browser tab is only the dev
-server — file dialogs and video decoding do not work there.
-
-## Build a Windows executable
-
-```bash
-npm run dist     # → release/  (installer + portable .exe)
-```
-
-## How a project is stored
-
-One folder holds everything, and paths inside `project.json` are **relative**, so the folder
-can be moved, copied to a USB stick, or opened on another machine:
+Load a scan, draw around the tissue, and it returns area, width and depth in millimetres and exports
+a CSV. It replaced a manual MATLAB workflow where each measurement was traced and converted by hand.
 
 ```
-<Project>/
-  project.json            timepoints, captures, outlines, scale
-  <Timepoint>/<clip>/     the video plus the stills extracted from it
-  measurements.csv        exported measurements
+  ultrasound clip (.avi)          ┌──────────────────────────┐
+  or still images         ──────► │  pick a clear frame      │
+                                  │  draw the outline        │  ◄── the operator does this
+                                  └────────────┬─────────────┘
+                                               │  pixels
+                                               ▼
+                                  ┌──────────────────────────┐
+                                  │  scale: 308 px/cm        │
+                                  │  area · width · depth    │
+                                  └────────────┬─────────────┘
+                                               ▼
+                                    area_mm2, width_mm, depth_mm  →  CSV
 ```
 
-## Workflow
+## Decisions
 
-1. Create or open a project.
-2. Add a timepoint — any name (`Week 1`, `Aug 12 scan`); no fixed schedule.
-3. Add a video: it is copied into the project, split into stills, and opens the measuring screen.
-4. Drag the video to a clear frame → **Capture ▸** → draw the outline on the right.
-5. **Save measurement** (it advances to the next unmeasured capture), then **Export CSV**.
+**It runs entirely in the browser.** It began as an Electron desktop app, which meant Racheal and
+Kate had to install something, and every fix meant sending them a new `.exe`. It now runs from
+GitHub Pages, so a link is the whole install and an update reaches them on refresh. No file leaves
+their machine.
 
-## Scale
+**Frame choice and outlining stay manual.** The tissue boundary in an ultrasound is ambiguous, and
+the researchers are the ones qualified to judge where it sits. The tool handles scaling,
+arithmetic and record keeping. Every outline is stored, so the accumulated set can train a
+segmentation model later.
 
-Measurements are millimetres, derived from pixels-per-centimetre read off the scanner's depth
-ruler. Set the project default in **Settings**; override it on a single image if that clip used
-a different depth. The effective scale is written to every CSV row, so an override is never
-hidden.
+**Scale is a project default with a per-image override, and it is written to every CSV row.** The
+Philips Lumify exports at 308 px/cm, which is a property of the 1280x720 export rather than the
+scanner, so a clip captured differently needs a different number. Writing the effective scale into
+each row means an override is never hidden from whoever reads the CSV afterwards.
 
-Quarter (`LF` / `RF` / `LR` / `RR`) works the same way: a project default with a per-image
-override.
+**Quarter numbering follows the group's own convention**, confirmed with Kate in August 2026:
+1 = left front, 2 = left rear, 3 = right rear, 4 = right front. Same pattern as scale, a project
+default with a per-image override.
 
 ## CSV output
 
@@ -69,11 +52,18 @@ override.
 calf_id, quarter, timepoint, date, diet, clip, frame, area_mm2, width_mm, depth_mm, scale_px_per_cm
 ```
 
-## Layout
+## Where to look
 
-```
-electron/     main process: window, ffmpeg, file dialogs, project read/write
-src/screens/  Start · Timepoints · TimepointView · MeasureView
-src/measure.ts  area/width/depth, self-intersection check, scale resolution
-src/paths.ts    relative ↔ absolute path handling, filename sanitising
-```
+| File | Why |
+|---|---|
+| [`src/measure.ts`](src/measure.ts) | Area, width and depth from the outline. Self-intersection check and scale resolution live here. |
+| [`src/screens/MeasureView.tsx`](src/screens/MeasureView.tsx) | The drawing canvas, Konva, and the capture flow |
+| [`src/screens/Timepoints.tsx`](src/screens/Timepoints.tsx) | How a study is organised: project, timepoint, clip, capture |
+
+A project is one folder and every path inside `project.json` is relative, so it can be copied to a
+USB stick or opened on another machine and still resolve.
+
+---
+
+React 19, TypeScript, Vite, Konva for the canvas, Zustand for state. Deployed to GitHub Pages from
+`docs/`.
